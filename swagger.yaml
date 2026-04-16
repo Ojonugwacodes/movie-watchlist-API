@@ -1,0 +1,457 @@
+openapi: 3.0.3
+info:
+  title: Movie Watchlist API
+  description: A RESTful Movie Watchlist API with CRUD operations, built using Node.js, Express, PostgreSQL, Prisma ORM, JWT Authentication and Validation.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5001
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: User authentication (register, login, logout, delete)
+  - name: Watchlist
+    description: Manage your movie watchlist (requires authentication)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        createdAt:
+          type: string
+          format: date-time
+
+    Movie:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        overview:
+          type: string
+          nullable: true
+        releaseYear:
+          type: integer
+        genres:
+          type: array
+          items:
+            type: string
+        runtime:
+          type: integer
+          nullable: true
+        posterUrl:
+          type: string
+          nullable: true
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    WatchlistItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        movieId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PLANNED, WATCHING, COMPLETED, DROPPED]
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 10
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  example: John Doe
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  minLength: 6
+                  example: password123
+      responses:
+        "200":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          name:
+                            type: string
+                          email:
+                            type: string
+                            format: email
+                      token:
+                        type: string
+        "400":
+          description: User already exists with this email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  example: password123
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          email:
+                            type: string
+                            format: email
+                      token:
+                        type: string
+        "400":
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Login failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout a user
+      description: Clears the JWT cookie to log the user out.
+      responses:
+        "200":
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Logged out successfully
+
+  /auth/delete/{id}:
+    delete:
+      tags: [Auth]
+      summary: Delete a user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The user ID
+      responses:
+        "200":
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User deleted successfully
+        "500":
+          description: Failed to delete user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /watchlist:
+    post:
+      tags: [Watchlist]
+      summary: Add a movie to the watchlist
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [movieId]
+              properties:
+                movieId:
+                  type: string
+                  format: uuid
+                  example: 550e8400-e29b-41d4-a716-446655440000
+                status:
+                  type: string
+                  enum: [PLANNED, WATCHING, COMPLETED, DROPPED]
+                  default: PLANNED
+                  example: PLANNED
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  example: 8
+                notes:
+                  type: string
+                  example: Great movie, want to rewatch
+      responses:
+        "201":
+          description: Movie added to watchlist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WatchlistItem"
+        "400":
+          description: Movie already in watchlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Movie not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /watchlist/{id}:
+    put:
+      tags: [Watchlist]
+      summary: Update a watchlist item
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The watchlist item ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [PLANNED, WATCHING, COMPLETED, DROPPED]
+                  example: COMPLETED
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  example: 9
+                notes:
+                  type: string
+                  example: Amazing film
+      responses:
+        "200":
+          description: Watchlist item updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      watchlistItem:
+                        $ref: "#/components/schemas/WatchlistItem"
+        "401":
+          description: Not authorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not allowed to update this watchlist item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Watchlist item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags: [Watchlist]
+      summary: Remove a movie from the watchlist
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The watchlist item ID
+      responses:
+        "200":
+          description: Movie removed from watchlist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Movie removed from watchlist
+        "401":
+          description: Not authorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not allowed to delete this watchlist item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Watchlist item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
